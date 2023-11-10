@@ -2,6 +2,7 @@ import torch
 from abc import abstractmethod
 from numpy import inf
 from logger import TensorboardWriter
+from utils.util import MetricTracker
 
 
 class BaseTrainer:
@@ -20,6 +21,7 @@ class BaseTrainer:
         cfg_trainer = config['trainer']
         self.epochs = cfg_trainer['epochs']
         self.save_period = cfg_trainer['save_period']
+        self.val_freq = cfg_trainer['val_freq']
         self.monitor = cfg_trainer.get('monitor', 'off')
 
         # configuration to monitor model performance and save best
@@ -39,8 +41,11 @@ class BaseTrainer:
 
         self.checkpoint_dir = config.save_dir
 
-        # setup visualization writer instance                
+        # setup visualization writer instance
+        # todo: dig out the writer here                
         self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
+        self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)
@@ -54,6 +59,10 @@ class BaseTrainer:
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def _valid_epoch(self, epoch):
+        raise NotImplementedError
+
     def train(self):
         """
         Full training logic
@@ -62,21 +71,42 @@ class BaseTrainer:
         for epoch in range(self.start_epoch, self.epochs + 1):
             result = self._train_epoch(epoch)
 
-            # save logged informations into log dict
-            log = {'epoch': epoch}
-            log.update(result)
-
             # print logged informations to the screen
-            for key, value in log.items():
-                self.logger.info('    {:15s}: {}'.format(str(key), value))
+            train_log = ''
+            for key, value in result.items():
+                train_log += '{}: {:.5f}  '.format(str(key), value)
+            self.logger.info(train_log)
+
+            # write the tensorboard
+            self.writer.set_step(epoch)
+            res_tensor = self.train_metrics.result()
+            self.writer.add_scalar('loss', res_tensor['loss'])
+            for met in self.metric_ftns:
+                met_name = met.__name__
+                self.writer.add_scalar(met_name, res_tensor[met_name])
+
+            # evaluate the model
+            if(epoch%self.val_freq==0):
+                result_val = self._valid_epoch(epoch)
+                # val log
+                self.logger.info('#'*25)
+                for key, value in result_val.items():
+                    self.logger.info('{}: {:.5f}'.format(str(key), value)) 
+                self.logger.info('#'*25)
+                # val tensorboard
+                res_tensor = self.valid_metrics.result()
+                self.writer.add_scalar('val_loss', res_tensor['loss'])
+                for met in self.metric_ftns:
+                    met_name = met.__name__
+                    self.writer.add_scalar('val_'+met_name, res_tensor[met_name])
 
             # evaluate model performance according to configured metric, save best checkpoint as model_best
             best = False
-            if self.mnt_mode != 'off':
+            if self.mnt_mode != 'off' and epoch % self.val_freq == 0:
                 try:
                     # check whether model performance improved or not, according to specified metric(mnt_metric)
-                    improved = (self.mnt_mode == 'min' and log[self.mnt_metric] <= self.mnt_best) or \
-                               (self.mnt_mode == 'max' and log[self.mnt_metric] >= self.mnt_best)
+                    improved = (self.mnt_mode == 'min' and result_val[self.mnt_metric] <= self.mnt_best) or \
+                               (self.mnt_mode == 'max' and result_val[self.mnt_metric] >= self.mnt_best)
                 except KeyError:
                     self.logger.warning("Warning: Metric '{}' is not found. "
                                         "Model performance monitoring is disabled.".format(self.mnt_metric))
@@ -84,7 +114,7 @@ class BaseTrainer:
                     improved = False
 
                 if improved:
-                    self.mnt_best = log[self.mnt_metric]
+                    self.mnt_best = result[self.mnt_metric]
                     not_improved_count = 0
                     best = True
                 else:

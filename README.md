@@ -141,8 +141,9 @@ Config files are in `.json` format:
   "trainer": {
     "epochs": 100,                     // number of training epochs
     "save_dir": "saved/",              // checkpoints are saved in save_dir/models/name
+    "val_freq": 5,                     // the frequency of the validation process
     "save_freq": 1,                    // save checkpoints every save_freq epochs
-    "verbosity": 2,                    // 0: quiet, 1: per epoch, 2: full
+    "verbosity": 2,                    // 0: WARNING, 1: INFO, 2: DEBUG
   
     "monitor": "min val_loss"          // mode and metric for model performance monitoring. set 'off' to disable.
     "early_stop": 10	                 // number of epochs to wait before early stop. set 0 to disable.
@@ -153,6 +154,13 @@ Config files are in `.json` format:
 ```
 
 Add addional configurations if you need.
+
+### Custom Design
+1. val image
+The code of validation image on the tensorboard is written in trainer.trainer._val_epoch. If you want to display more images, target of input images, or close it, then modify it.
+
+2. model parameters
+The change of model's paramters can also be shown on the tensorboard, just free the note in the node of trainer.trainer._val_epoch
 
 ### Using config files
 Modify the configurations in `.json` config files, then run:

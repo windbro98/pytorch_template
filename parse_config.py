@@ -111,6 +111,8 @@ class ConfigParser:
         """Access items like ordinary dict."""
         return self.config[name]
 
+    # the level of verbosity:
+    # 0 - WARNING; 1 - INFO; 2 - DEBUG hign -> low
     def get_logger(self, name, verbosity=2):
         msg_verbosity = 'verbosity option {} is invalid. Valid options are {}.'.format(verbosity, self.log_levels.keys())
         assert verbosity in self.log_levels, msg_verbosity

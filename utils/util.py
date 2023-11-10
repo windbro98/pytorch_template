@@ -4,7 +4,10 @@ import pandas as pd
 from pathlib import Path
 from itertools import repeat
 from collections import OrderedDict
+from PIL import Image
 
+def extract_image_L(imgPath):
+    return Image.open(imgPath).convert('L')
 
 def ensure_dir(dirname):
     dirname = Path(dirname)
@@ -54,8 +57,6 @@ class MetricTracker:
             self._data[col].values[:] = 0
 
     def update(self, key, value, n=1):
-        if self.writer is not None:
-            self.writer.add_scalar(key, value)
         self._data.total[key] += value * n
         self._data.counts[key] += n
         self._data.average[key] = self._data.total[key] / self._data.counts[key]
