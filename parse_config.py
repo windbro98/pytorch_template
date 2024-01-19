@@ -36,6 +36,9 @@ class ConfigParser:
         self.save_dir.mkdir(parents=True, exist_ok=exist_ok)
         self.log_dir.mkdir(parents=True, exist_ok=exist_ok)
 
+        # add the resume path
+        self.config['resume'] = str(self.resume)
+
         # save updated config file to the checkpoint dir
         write_json(self.config, self.save_dir / 'config.json')
 
